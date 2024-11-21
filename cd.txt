@@ -1,0 +1,405 @@
+#constant_folding
+
+import astor
+import ast
+
+def eval_constant_binop(node):
+    if isinstance(node.left, ast.Constant) and isinstance(node.right, ast.Constant):
+        # Correctly create an expression containing the binary operation
+        expression = ast.Expression(node)
+        # Compile the expression and evaluate it
+        return eval(compile(expression, filename="<ast>", mode="eval"))
+    return None
+
+def constant_fold(tree):
+    for node in ast.walk(tree):
+        if isinstance(node, ast.BinOp):
+            result = eval_constant_binop(node)
+            if result is not None:
+                constant_node = ast.Constant(result)
+                ast.copy_location(constant_node, node)
+                parent = find_parent(tree, node)
+                replace_node(parent, node, constant_node)
+    return tree
+
+def find_parent(tree, target_node):
+    for node in ast.walk(tree):
+        for child in ast.iter_child_nodes(node):
+            if child is target_node:
+                return node
+    return None
+
+def replace_node(parent, target_node, new_node):
+    for field, value in ast.iter_fields(parent):
+        if isinstance(value, list):
+            for i, item in enumerate(value):
+                if item is target_node:
+                    value[i] = new_node
+        elif value is target_node:
+            setattr(parent, field, new_node)
+
+def constant_folding_optimization(input_code):
+    tree = ast.parse(input_code)
+    optimized_tree = constant_fold(tree)
+    optimized_code = astor.to_source(optimized_tree)
+    return optimized_code
+
+# Input code to be optimized
+input_program = """
+a = 5 * 2
+b = 10 + 20
+c = b - 5
+d = a + b * c
+e = 2 ** 3
+"""
+
+print("Original Code:")
+print(input_program)
+
+# Perform constant folding optimization
+optimized_program = constant_folding_optimization(input_program)
+
+print("\nOptimized Code:")
+print(optimized_program)
+
+
+#copy_propagation
+
+import ast
+import astor
+
+def collect_assignments(tree):
+    # Create a mapping to track variable assignments where a variable is assigned another variable
+    assignments = {}
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and isinstance(node.value, ast.Name):
+                    # Only track assignments where a variable is assigned another variable
+                    assignments[target.id] = node.value
+
+    return assignments
+
+def apply_copy_propagation(tree, assignments):
+    class CopyPropagationVisitor(ast.NodeTransformer):
+        def visit_Name(self, node):
+            # If the variable is a copy of another, replace it with the original value
+            if node.id in assignments:
+                return assignments[node.id]
+            return node
+
+    return CopyPropagationVisitor().visit(tree)
+
+def copy_propagation_optimization(input_code):
+    tree = ast.parse(input_code)
+    assignments = collect_assignments(tree)
+    optimized_tree = apply_copy_propagation(tree, assignments)
+    optimized_code = astor.to_source(optimized_tree)
+    return optimized_code
+
+# Example usage
+input_program = """
+x = 5
+y = x
+z = y + 2
+"""
+
+print("Original Code:")
+print(input_program)
+
+# Perform copy propagation optimization
+optimized_program = copy_propagation_optimization(input_program)
+
+print("Copy Propagation Optimized Code:")
+print(optimized_program)
+
+
+#common sub expression elimination
+
+def common_subexpression_elimination(expressions):
+    subexpr_dict = {}
+    optimized_expressions = []
+
+    # First loop to detect common subexpressions
+    for expr in expressions:
+        if expr in subexpr_dict:
+            optimized_expressions.append(f"t{subexpr_dict[expr]}")  # Reuse the previously computed value
+        else:
+            subexpr_index = len(subexpr_dict) + 1  # Create a new temporary variable
+            subexpr_dict[expr] = subexpr_index  # Assign the new index to the expression
+            optimized_expressions.append(expr)  # Keep the original expression for the first time
+
+    # Create assignments for the subexpressions (temporary variables)
+    optimized_code = []
+    for expr, index in subexpr_dict.items():
+        optimized_code.append(f"t{index} = {expr}")  # Assign temporary variables
+
+    # Append the optimized expressions which use temporary variables
+    for expr in optimized_expressions:
+        optimized_code.append(expr)
+
+    return optimized_code
+
+# List of expressions
+expressions = [
+    "a + b",  # First expression
+    "c + d",  # Second expression
+    "a + b",  # Duplicate expression (can be optimized)
+    "e * f",  # Fourth expression
+    "c + d",  # Duplicate expression (can be optimized)
+    "g + h"   # Sixth expression
+]
+
+# Apply Common Subexpression Elimination
+optimized_code = common_subexpression_elimination(expressions)
+
+# Display the result
+print("Optimized Code:")
+for line in optimized_code:
+    print(line)
+
+#dead_code
+
+import astor
+import ast
+
+
+def dead_code_elimination(tree):
+    used_vars = set()
+
+    # First pass: Collect all variables that are used (read) in the code
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+            used_vars.add(node.id)
+
+    # Second pass: Remove assignments to variables that are not used
+    new_body = []
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            # Check if the target of the assignment is a variable and if it's used
+            if isinstance(node.targets[0], ast.Name) and node.targets[0].id in used_vars:
+                new_body.append(node)  # Keep the assignment if the variable is used
+        else:
+            new_body.append(node)  # Keep non-assignment statements
+
+    tree.body = new_body
+    return tree
+
+def dead_code_elimination_optimization(input_code):
+    tree = ast.parse(input_code)
+    optimized_tree = dead_code_elimination(tree)
+    optimized_code = astor.to_source(optimized_tree)
+    return optimized_code
+
+# Example usage
+input_program = """
+x = 5
+y = 10
+z = 15
+m = 100
+if False:
+    a = 20 + m
+b = x + y
+"""
+
+optimized_program = dead_code_elimination_optimization(input_program)
+print("\nDead Code Elimination Optimized Code:")
+print(optimized_program)
+
+
+#loop unrolling
+
+import astor
+import ast
+
+def loop_unrolling(tree):
+    for node in ast.walk(tree):
+        if isinstance(node, ast.For):
+            # Unroll the loop by duplicating the body
+            body = node.body * 2  # Unroll by a factor of 2
+            node.body = body
+    return tree
+
+def loop_unrolling_optimization(input_code):
+    tree = ast.parse(input_code)
+    optimized_tree = loop_unrolling(tree)
+    optimized_code = astor.to_source(optimized_tree)
+    return optimized_code
+
+# Example usage
+input_program = ""
+for i in range(2):
+    print(i)
+""
+
+optimized_program = loop_unrolling_optimization(input_program)
+
+# Display the input and output
+print("Input Program:")
+print(input_program)
+print("Loop Unrolling Optimized Code:")
+print(optimized_program)
+
+
+#ast_to_tac
+
+import ast
+def new_temp(counter):
+    counter[0] += 1
+    return f"t{counter[0]}"
+
+def generate_tac(node, counter, instructions):
+    if isinstance(node, ast.BinOp):
+        left = generate_tac(node.left, counter, instructions)
+        right = generate_tac(node.right, counter, instructions)
+        temp = new_temp(counter)
+        op = {ast.Add: "+", ast.Sub: "-", ast.Mult: "*", ast.Div: "/"}[type(node.op)]
+        instructions.append(f"{temp} = {left} {op} {right}")
+        return temp
+    return node.id if isinstance(node, ast.Name) else str(node.value)
+
+def get_tac(tree):
+    counter, instructions = [0], []
+    generate_tac(tree.body, counter, instructions)
+    return instructions
+
+def start():
+    tree = ast.parse("(a+b)*(c+d)", mode='eval')
+    for instr in get_tac(tree):
+        print(instr)
+start()
+
+#rdp
+
+class ASTNode:
+    def __init__(self, node_type, value=None, left=None, right=None):
+        self.node_type = node_type  # 'NUMBER', 'PLUS', 'MULTIPLY', etc.
+        self.value = value  # Number value or operator
+        self.left = left  # Left child node
+        self.right = right  # Right child node
+
+def ast_to_tac(ast):
+    # Generate TAC instructions and temporary variables
+    tac_code = []
+    temp_count = 1  # Start numbering temporary variables from t1
+    
+    def traverse(node):
+        nonlocal temp_count
+        
+        if node is None:
+            return None
+        
+        if node.node_type == 'NUMBER':
+            return str(node.value)  # Return the number as a string
+        
+        # Traverse left and right children
+        left = traverse(node.left)
+        right = traverse(node.right)
+        
+        # Generate a new temporary variable (t1, t2, etc.)
+        result = f"t{temp_count}"
+        temp_count += 1
+        
+        # Create TAC for the current operation
+        if node.node_type == 'PLUS':
+            tac_code.append(f"{result} = {left} + {right}")
+        elif node.node_type == 'MULTIPLY':
+            tac_code.append(f"{result} = {left} * {right}")
+        
+        return result
+    
+    traverse(ast)
+    return tac_code
+
+# Example usage:
+# Manually creating an AST for the expression (5 + 3) * 2
+
+n1 = ASTNode('NUMBER', 5)  # 5
+n2 = ASTNode('NUMBER', 3)  # 3
+plus_node = ASTNode('PLUS', '+', n1, n2)  # 5 + 3
+
+n3 = ASTNode('NUMBER', 2)  # 2
+multiply_node = ASTNode('MULTIPLY', '*', plus_node, n3)  # (5 + 3) * 2
+
+# Generate TAC
+tac = ast_to_tac(multiply_node)
+
+# Output the generated TAC
+for instruction in tac:
+    print(instruction)
+
+
+#type checker
+
+class ASTNode:
+    def __init__(self, node_type, value=None, left=None, right=None):
+        self.node_type = node_type  # 'NUMBER', 'PLUS', 'MULTIPLY', etc.
+        self.value = value  # Number value or operator
+        self.left = left  # Left child node
+        self.right = right  # Right child node
+
+    def __repr__(self):
+        return f"ASTNode({self.node_type}, {self.value})"
+
+
+# Type checker function
+def type_check(ast):
+    def check_type(node):
+        if node is None:
+            return None
+
+        if node.node_type == 'NUMBER':
+            # Determine the type of the number (e.g., int or float)
+            if isinstance(node.value, int):
+                return 'int'
+            elif isinstance(node.value, float):
+                return 'float'
+
+        elif node.node_type in ('PLUS', 'MINUS', 'MULTIPLY', 'DIVIDE'):
+            # Check the types of the left and right operands
+            left_type = check_type(node.left)
+            right_type = check_type(node.right)
+
+            if left_type is None or right_type is None:
+                return None
+
+            # Type checking rules
+            if left_type == 'int' and right_type == 'int':
+                return 'int'
+            elif left_type == 'float' and right_type == 'float':
+                return 'float'
+            elif (left_type == 'int' and right_type == 'float') or (left_type == 'float' and right_type == 'int'):
+                return 'float'
+            else:
+                raise TypeError(f"Type mismatch: Cannot operate {left_type} and {right_type}")
+
+        return None
+
+    try:
+        result_type = check_type(ast)
+        print(f"Expression is valid. Result type: {result_type}")
+    except TypeError as e:
+        print(f"Type error: {e}")
+
+# Example usage:
+
+# Construct an AST for the expression (5 + 3) * 2
+n1 = ASTNode('NUMBER', 5)  # 5 (int)
+n2 = ASTNode('NUMBER', 3)  # 3 (int)
+plus_node = ASTNode('PLUS', '+', n1, n2)  # 5 + 3
+
+n3 = ASTNode('NUMBER', 2)  # 2 (int)
+multiply_node = ASTNode('MULTIPLY', '*', plus_node, n3)  # (5 + 3) * 2
+
+# Perform type checking on the AST
+type_check(multiply_node)
+
+# Example of a type error (5 + "hello")
+n1 = ASTNode('NUMBER', 5)  # 5 (int)
+n2 = ASTNode('NUMBER', "hello")  # "hello" (string)
+plus_node = ASTNode('PLUS', '+', n1, n2)  # 5 + "hello"
+
+# Perform type checking on the invalid AST
+type_check(plus_node)
+
