@@ -1,405 +1,321 @@
-#constant_folding
+#T-SNE
 
-import astor
-import ast
+from sklearn.datasets import load_digits
+from sklearn.cluster import KMeans
+from sklearn.manifold import TSNE
+import matplotlib.pyplot as plt
+import numpy as np
 
-def eval_constant_binop(node):
-    if isinstance(node.left, ast.Constant) and isinstance(node.right, ast.Constant):
-        # Correctly create an expression containing the binary operation
-        expression = ast.Expression(node)
-        # Compile the expression and evaluate it
-        return eval(compile(expression, filename="<ast>", mode="eval"))
-    return None
+# Load Digits dataset
+digits = load_digits()
+X = digits.data
+y = digits.target  # True labels (for visualization, not used in clustering)
 
-def constant_fold(tree):
-    for node in ast.walk(tree):
-        if isinstance(node, ast.BinOp):
-            result = eval_constant_binop(node)
-            if result is not None:
-                constant_node = ast.Constant(result)
-                ast.copy_location(constant_node, node)
-                parent = find_parent(tree, node)
-                replace_node(parent, node, constant_node)
-    return tree
+# Step 1: Perform t-SNE for dimensionality reduction
+tsne = TSNE(n_components=2, random_state=42, perplexity=30, n_iter=300)
+X_tsne = tsne.fit_transform(X)
 
-def find_parent(tree, target_node):
-    for node in ast.walk(tree):
-        for child in ast.iter_child_nodes(node):
-            if child is target_node:
-                return node
-    return None
+# Step 2: Apply K-Means clustering
+kmeans = KMeans(n_clusters=10, random_state=42)
+clusters = kmeans.fit_predict(X_tsne)
 
-def replace_node(parent, target_node, new_node):
-    for field, value in ast.iter_fields(parent):
-        if isinstance(value, list):
-            for i, item in enumerate(value):
-                if item is target_node:
-                    value[i] = new_node
-        elif value is target_node:
-            setattr(parent, field, new_node)
-
-def constant_folding_optimization(input_code):
-    tree = ast.parse(input_code)
-    optimized_tree = constant_fold(tree)
-    optimized_code = astor.to_source(optimized_tree)
-    return optimized_code
-
-# Input code to be optimized
-input_program = """
-a = 5 * 2
-b = 10 + 20
-c = b - 5
-d = a + b * c
-e = 2 ** 3
-"""
-
-print("Original Code:")
-print(input_program)
-
-# Perform constant folding optimization
-optimized_program = constant_folding_optimization(input_program)
-
-print("\nOptimized Code:")
-print(optimized_program)
+# Step 3: Visualize the clusters
+plt.figure(figsize=(10, 7))
+scatter = plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=clusters, cmap='tab10', s=50, alpha=0.7)
+plt.colorbar(scatter, ticks=range(10), label="Cluster ID")
+plt.title("K-Means Clustering on t-SNE-Reduced Digits Data", fontsize=14)
+plt.xlabel("t-SNE Component 1")
+plt.ylabel("t-SNE Component 2")
+plt.show()
 
 
-#copy_propagation
+#T-SNE
 
-import ast
-import astor
+from sklearn.datasets import load_digits
+from sklearn.cluster import KMeans
+from sklearn.manifold import TSNE
+import matplotlib.pyplot as plt
+import numpy as np
 
-def collect_assignments(tree):
-    # Create a mapping to track variable assignments where a variable is assigned another variable
-    assignments = {}
+# Load Digits dataset
+digits = load_digits()
+X = digits.data
+y = digits.target  # True labels (for visualization, not used in clustering)
 
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Assign):
-            for target in node.targets:
-                if isinstance(target, ast.Name) and isinstance(node.value, ast.Name):
-                    # Only track assignments where a variable is assigned another variable
-                    assignments[target.id] = node.value
+# Step 1: Perform t-SNE for dimensionality reduction
+tsne = TSNE(n_components=2, random_state=42, perplexity=30, n_iter=300)
+X_tsne = tsne.fit_transform(X)
 
-    return assignments
+# Step 2: Apply K-Means clustering
+kmeans = KMeans(n_clusters=10, random_state=42)
+clusters = kmeans.fit_predict(X_tsne)
 
-def apply_copy_propagation(tree, assignments):
-    class CopyPropagationVisitor(ast.NodeTransformer):
-        def visit_Name(self, node):
-            # If the variable is a copy of another, replace it with the original value
-            if node.id in assignments:
-                return assignments[node.id]
-            return node
-
-    return CopyPropagationVisitor().visit(tree)
-
-def copy_propagation_optimization(input_code):
-    tree = ast.parse(input_code)
-    assignments = collect_assignments(tree)
-    optimized_tree = apply_copy_propagation(tree, assignments)
-    optimized_code = astor.to_source(optimized_tree)
-    return optimized_code
-
-# Example usage
-input_program = """
-x = 5
-y = x
-z = y + 2
-"""
-
-print("Original Code:")
-print(input_program)
-
-# Perform copy propagation optimization
-optimized_program = copy_propagation_optimization(input_program)
-
-print("Copy Propagation Optimized Code:")
-print(optimized_program)
+# Step 3: Visualize the clusters
+plt.figure(figsize=(10, 7))
+scatter = plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=clusters, cmap='tab10', s=50, alpha=0.7)
+plt.colorbar(scatter, ticks=range(10), label="Cluster ID")
+plt.title("K-Means Clustering on t-SNE-Reduced Digits Data", fontsize=14)
+plt.xlabel("t-SNE Component 1")
+plt.ylabel("t-SNE Component 2")
+plt.show()
 
 
-#common sub expression elimination
+#Code for Decision Tree and Model Evaluation in Python
 
-def common_subexpression_elimination(expressions):
-    subexpr_dict = {}
-    optimized_expressions = []
+from sklearn.tree import DecisionTreeClassifier, plot_tree
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+from sklearn.model_selection import train_test_split
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
 
-    # First loop to detect common subexpressions
-    for expr in expressions:
-        if expr in subexpr_dict:
-            optimized_expressions.append(f"t{subexpr_dict[expr]}")  # Reuse the previously computed value
-        else:
-            subexpr_index = len(subexpr_dict) + 1  # Create a new temporary variable
-            subexpr_dict[expr] = subexpr_index  # Assign the new index to the expression
-            optimized_expressions.append(expr)  # Keep the original expression for the first time
+# Load a sample dataset similar to weather.numeric
+data = {
+    'Temperature': [85, 80, 83, 70, 68, 65, 75, 72, 69, 81],
+    'Humidity': [85, 90, 86, 96, 80, 70, 80, 95, 70, 75],
+    'Windy': [0, 1, 0, 0, 0, 1, 1, 0, 1, 1],
+    'PlayTennis': [0, 0, 1, 1, 1, 1, 1, 0, 1, 0],
+}
+df = pd.DataFrame(data)
 
-    # Create assignments for the subexpressions (temporary variables)
-    optimized_code = []
-    for expr, index in subexpr_dict.items():
-        optimized_code.append(f"t{index} = {expr}")  # Assign temporary variables
+# Split dataset into features and target
+X = df.drop('PlayTennis', axis=1)
+y = df['PlayTennis']
 
-    # Append the optimized expressions which use temporary variables
-    for expr in optimized_expressions:
-        optimized_code.append(expr)
+# Step 1: Split data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
 
-    return optimized_code
+# Step 2: Train a Decision Tree Classifier
+clf = DecisionTreeClassifier(random_state=42)
+clf.fit(X_train, y_train)
 
-# List of expressions
-expressions = [
-    "a + b",  # First expression
-    "c + d",  # Second expression
-    "a + b",  # Duplicate expression (can be optimized)
-    "e * f",  # Fourth expression
-    "c + d",  # Duplicate expression (can be optimized)
-    "g + h"   # Sixth expression
+# Step 3: Make predictions on the test set
+y_pred = clf.predict(X_test)
+
+# Step 4: Evaluate the model's performance
+print("Accuracy Score:", accuracy_score(y_test, y_pred))
+print("\nClassification Report:\n", classification_report(y_test, y_pred))
+print("\nConfusion Matrix:\n", confusion_matrix(y_test, y_pred))
+
+# Step 5: Visualize the Decision Tree
+plt.figure(figsize=(12, 8))
+plot_tree(clf, filled=True, feature_names=X.columns, class_names=['No', 'Yes'], rounded=True)
+plt.title("Decision Tree Classifier - PlayTennis Prediction")
+plt.show()
+
+
+
+#Naïve Bayes Classifier on Weather Numeric Dataset
+
+from sklearn.naive_bayes import GaussianNB
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+import pandas as pd
+
+# Sample numeric dataset for weather prediction (numeric features)
+data_numeric = {
+    'Temperature': [85, 80, 83, 70, 68, 65, 75, 72, 69, 81],
+    'Humidity': [85, 90, 86, 96, 80, 70, 80, 95, 70, 75],
+    'Windy': [0, 1, 0, 0, 0, 1, 1, 0, 1, 1],
+    'PlayTennis': [0, 0, 1, 1, 1, 1, 1, 0, 1, 0]
+}
+df_numeric = pd.DataFrame(data_numeric)
+
+# Split dataset into features and target
+X_numeric = df_numeric.drop('PlayTennis', axis=1)
+y_numeric = df_numeric['PlayTennis']
+
+# Train-test split
+X_train, X_test, y_train, y_test = train_test_split(X_numeric, y_numeric, test_size=0.3, random_state=42)
+
+# Train Naïve Bayes Classifier (GaussianNB for numeric data)
+nb_model_numeric = GaussianNB()
+nb_model_numeric.fit(X_train, y_train)
+
+# Predictions
+y_pred_numeric = nb_model_numeric.predict(X_test)
+
+# Evaluate the model
+print("Accuracy:", accuracy_score(y_test, y_pred_numeric))
+print("Confusion Matrix:")
+print(confusion_matrix(y_test, y_pred_numeric))
+print("Classification Report:")
+print(classification_report(y_test, y_pred_numeric))
+
+
+
+# Naïve Bayes Classifier on Weather Nominal Dataset
+from sklearn.naive_bayes import CategoricalNB
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+import pandas as pd
+
+# Sample nominal dataset for weather prediction (categorical features)
+data_nominal = {
+    'Outlook': ['Sunny', 'Sunny', 'Overcast', 'Rainy', 'Rainy', 'Rainy', 'Overcast', 'Sunny', 'Sunny', 'Rainy'],
+    'Temperature': ['Hot', 'Hot', 'Hot', 'Mild', 'Cool', 'Cool', 'Mild', 'Mild', 'Cool', 'Mild'],
+    'Humidity': ['High', 'High', 'High', 'High', 'Low', 'Low', 'High', 'Low', 'Low', 'High'],
+    'Windy': ['False', 'True', 'False', 'False', 'False', 'True', 'True', 'False', 'True', 'True'],
+    'PlayTennis': ['No', 'No', 'Yes', 'Yes', 'Yes', 'No', 'Yes', 'No', 'Yes', 'No']
+}
+
+df_nominal = pd.DataFrame(data_nominal)
+
+# Convert categorical features to numeric codes
+df_nominal_encoded = df_nominal.apply(lambda x: pd.factorize(x)[0])
+
+# Split dataset into features and target
+X_nominal = df_nominal_encoded.drop('PlayTennis', axis=1)
+y_nominal = df_nominal_encoded['PlayTennis']
+
+# Train-test split
+X_train, X_test, y_train, y_test = train_test_split(X_nominal, y_nominal, test_size=0.3, random_state=42)
+
+# Train Naïve Bayes Classifier (CategoricalNB for nominal data)
+nb_model_nominal = CategoricalNB()
+nb_model_nominal.fit(X_train, y_train)
+
+# Predictions
+y_pred_nominal = nb_model_nominal.predict(X_test)
+
+# Evaluate the model
+print("Accuracy:", accuracy_score(y_test, y_pred_nominal))
+print("Confusion Matrix:")
+print(confusion_matrix(y_test, y_pred_nominal))
+print("Classification Report:")
+print(classification_report(y_test, y_pred_nominal))
+
+
+
+#Exploratory Data Analysis (EDA)
+
+# Import necessary libraries
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Load dataset (use any dataset, here using the famous Titanic dataset)
+url = "https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv"
+df = pd.read_csv(url)
+
+# Basic Information
+print(df.info())  # Data types and missing values
+print(df.describe())  # Summary statistics
+
+# Visualizing Missing Data
+plt.figure(figsize=(10, 6))
+sns.heatmap(df.isnull(), cbar=False, cmap='viridis')
+plt.title('Missing Data Visualization')
+plt.show()
+
+# Distribution of Age (with missing values handled)
+plt.figure(figsize=(10, 6))
+sns.histplot(df['Age'].dropna(), kde=True, bins=30)  # Dropping missing values for Age
+plt.title('Age Distribution')
+plt.show()
+
+# Correlation Matrix (handle non-numeric columns by selecting only numeric ones)
+plt.figure(figsize=(10, 6))
+sns.heatmap(df.select_dtypes(include=[np.number]).corr(), annot=True, cmap='coolwarm', fmt='.2f')
+plt.title('Correlation Matrix')
+plt.show()
+
+# Pairplot of selected features (ensure 'Survived' exists, and handle missing values)
+sns.pairplot(df[['Age', 'Fare', 'SibSp', 'Parch', 'Survived']].dropna(), hue='Survived')
+plt.show()
+
+
+
+# Import required libraries
+from mlxtend.frequent_patterns import apriori, association_rules
+import pandas as pd
+
+# Sample data: list of transactions where each transaction is a list of items
+dataset = [
+    ['Milk', 'Bread', 'Butter'],
+    ['Bread', 'Butter', 'Jam'],
+    ['Milk', 'Bread', 'Butter', 'Jam'],
+    ['Bread', 'Butter'],
+    ['Milk', 'Bread', 'Butter'],
+    ['Milk', 'Bread']
 ]
 
-# Apply Common Subexpression Elimination
-optimized_code = common_subexpression_elimination(expressions)
+# Convert the list of transactions into a one-hot encoded DataFrame
+df = pd.DataFrame(columns=['Milk', 'Bread', 'Butter', 'Jam'],
+                  data=[[1, 1, 1, 0], [0, 1, 1, 1], [1, 1, 1, 1],
+                        [0, 1, 1, 0], [1, 1, 1, 0], [1, 1, 0, 0]])
 
-# Display the result
-print("Optimized Code:")
-for line in optimized_code:
-    print(line)
+# Apply the Apriori algorithm to find frequent itemsets
+frequent_itemsets = apriori(df, min_support=0.5, use_colnames=True)
 
-#dead_code
+# Display the frequent itemsets
+print("Frequent Itemsets:")
+print(frequent_itemsets)
 
-import astor
-import ast
+# Generate the association rules from the frequent itemsets
+rules = association_rules(frequent_itemsets, metric="lift", min_threshold=1,num_itemsets=0)
 
-
-def dead_code_elimination(tree):
-    used_vars = set()
-
-    # First pass: Collect all variables that are used (read) in the code
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
-            used_vars.add(node.id)
-
-    # Second pass: Remove assignments to variables that are not used
-    new_body = []
-    for node in tree.body:
-        if isinstance(node, ast.Assign):
-            # Check if the target of the assignment is a variable and if it's used
-            if isinstance(node.targets[0], ast.Name) and node.targets[0].id in used_vars:
-                new_body.append(node)  # Keep the assignment if the variable is used
-        else:
-            new_body.append(node)  # Keep non-assignment statements
-
-    tree.body = new_body
-    return tree
-
-def dead_code_elimination_optimization(input_code):
-    tree = ast.parse(input_code)
-    optimized_tree = dead_code_elimination(tree)
-    optimized_code = astor.to_source(optimized_tree)
-    return optimized_code
-
-# Example usage
-input_program = """
-x = 5
-y = 10
-z = 15
-m = 100
-if False:
-    a = 20 + m
-b = x + y
-"""
-
-optimized_program = dead_code_elimination_optimization(input_program)
-print("\nDead Code Elimination Optimized Code:")
-print(optimized_program)
+# Display the generated association rules
+print("\nAssociation Rules:")
+print(rules)
 
 
-#loop unrolling
-
-import astor
-import ast
-
-def loop_unrolling(tree):
-    for node in ast.walk(tree):
-        if isinstance(node, ast.For):
-            # Unroll the loop by duplicating the body
-            body = node.body * 2  # Unroll by a factor of 2
-            node.body = body
-    return tree
-
-def loop_unrolling_optimization(input_code):
-    tree = ast.parse(input_code)
-    optimized_tree = loop_unrolling(tree)
-    optimized_code = astor.to_source(optimized_tree)
-    return optimized_code
-
-# Example usage
-input_program = ""
-for i in range(2):
-    print(i)
-""
-
-optimized_program = loop_unrolling_optimization(input_program)
-
-# Display the input and output
-print("Input Program:")
-print(input_program)
-print("Loop Unrolling Optimized Code:")
-print(optimized_program)
 
 
-#ast_to_tac
+#t-SNE vs PCA with K-Means
+import numpy as np
+import pandas as pd
+from sklearn.datasets import load_digits
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+import matplotlib.pyplot as plt
 
-import ast
-def new_temp(counter):
-    counter[0] += 1
-    return f"t{counter[0]}"
+# Load the digits dataset
+digits = load_digits()
+X = digits.data
+y = digits.target
 
-def generate_tac(node, counter, instructions):
-    if isinstance(node, ast.BinOp):
-        left = generate_tac(node.left, counter, instructions)
-        right = generate_tac(node.right, counter, instructions)
-        temp = new_temp(counter)
-        op = {ast.Add: "+", ast.Sub: "-", ast.Mult: "*", ast.Div: "/"}[type(node.op)]
-        instructions.append(f"{temp} = {left} {op} {right}")
-        return temp
-    return node.id if isinstance(node, ast.Name) else str(node.value)
+# Standardize the data
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
 
-def get_tac(tree):
-    counter, instructions = [0], []
-    generate_tac(tree.body, counter, instructions)
-    return instructions
+# 1. Apply PCA
+pca = PCA(n_components=2)
+X_pca = pca.fit_transform(X_scaled)
 
-def start():
-    tree = ast.parse("(a+b)*(c+d)", mode='eval')
-    for instr in get_tac(tree):
-        print(instr)
-start()
+# 2. Apply t-SNE
+tsne = TSNE(n_components=2)
+X_tsne = tsne.fit_transform(X_scaled)
 
-#rdp
+# 3. K-Means Clustering on PCA and t-SNE reduced data
+kmeans_pca = KMeans(n_clusters=10, random_state=42)
+kmeans_tsne = KMeans(n_clusters=10, random_state=42)
 
-class ASTNode:
-    def __init__(self, node_type, value=None, left=None, right=None):
-        self.node_type = node_type  # 'NUMBER', 'PLUS', 'MULTIPLY', etc.
-        self.value = value  # Number value or operator
-        self.left = left  # Left child node
-        self.right = right  # Right child node
+# Fit K-Means on PCA and t-SNE results
+y_pca = kmeans_pca.fit_predict(X_pca)
+y_tsne = kmeans_tsne.fit_predict(X_tsne)
 
-def ast_to_tac(ast):
-    # Generate TAC instructions and temporary variables
-    tac_code = []
-    temp_count = 1  # Start numbering temporary variables from t1
-    
-    def traverse(node):
-        nonlocal temp_count
-        
-        if node is None:
-            return None
-        
-        if node.node_type == 'NUMBER':
-            return str(node.value)  # Return the number as a string
-        
-        # Traverse left and right children
-        left = traverse(node.left)
-        right = traverse(node.right)
-        
-        # Generate a new temporary variable (t1, t2, etc.)
-        result = f"t{temp_count}"
-        temp_count += 1
-        
-        # Create TAC for the current operation
-        if node.node_type == 'PLUS':
-            tac_code.append(f"{result} = {left} + {right}")
-        elif node.node_type == 'MULTIPLY':
-            tac_code.append(f"{result} = {left} * {right}")
-        
-        return result
-    
-    traverse(ast)
-    return tac_code
+# Plot the results
+fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
-# Example usage:
-# Manually creating an AST for the expression (5 + 3) * 2
+# PCA Results
+axes[0].scatter(X_pca[:, 0], X_pca[:, 1], c=y_pca, cmap='viridis')
+axes[0].set_title("K-Means Clustering on PCA")
+axes[0].set_xlabel("PC1")
+axes[0].set_ylabel("PC2")
 
-n1 = ASTNode('NUMBER', 5)  # 5
-n2 = ASTNode('NUMBER', 3)  # 3
-plus_node = ASTNode('PLUS', '+', n1, n2)  # 5 + 3
+# t-SNE Results
+axes[1].scatter(X_tsne[:, 0], X_tsne[:, 1], c=y_tsne, cmap='viridis')
+axes[1].set_title("K-Means Clustering on t-SNE")
+axes[1].set_xlabel("t-SNE1")
+axes[1].set_ylabel("t-SNE2")
 
-n3 = ASTNode('NUMBER', 2)  # 2
-multiply_node = ASTNode('MULTIPLY', '*', plus_node, n3)  # (5 + 3) * 2
-
-# Generate TAC
-tac = ast_to_tac(multiply_node)
-
-# Output the generated TAC
-for instruction in tac:
-    print(instruction)
+plt.tight_layout()
+plt.show()
 
 
-#type checker
 
-class ASTNode:
-    def __init__(self, node_type, value=None, left=None, right=None):
-        self.node_type = node_type  # 'NUMBER', 'PLUS', 'MULTIPLY', etc.
-        self.value = value  # Number value or operator
-        self.left = left  # Left child node
-        self.right = right  # Right child node
-
-    def __repr__(self):
-        return f"ASTNode({self.node_type}, {self.value})"
-
-
-# Type checker function
-def type_check(ast):
-    def check_type(node):
-        if node is None:
-            return None
-
-        if node.node_type == 'NUMBER':
-            # Determine the type of the number (e.g., int or float)
-            if isinstance(node.value, int):
-                return 'int'
-            elif isinstance(node.value, float):
-                return 'float'
-
-        elif node.node_type in ('PLUS', 'MINUS', 'MULTIPLY', 'DIVIDE'):
-            # Check the types of the left and right operands
-            left_type = check_type(node.left)
-            right_type = check_type(node.right)
-
-            if left_type is None or right_type is None:
-                return None
-
-            # Type checking rules
-            if left_type == 'int' and right_type == 'int':
-                return 'int'
-            elif left_type == 'float' and right_type == 'float':
-                return 'float'
-            elif (left_type == 'int' and right_type == 'float') or (left_type == 'float' and right_type == 'int'):
-                return 'float'
-            else:
-                raise TypeError(f"Type mismatch: Cannot operate {left_type} and {right_type}")
-
-        return None
-
-    try:
-        result_type = check_type(ast)
-        print(f"Expression is valid. Result type: {result_type}")
-    except TypeError as e:
-        print(f"Type error: {e}")
-
-# Example usage:
-
-# Construct an AST for the expression (5 + 3) * 2
-n1 = ASTNode('NUMBER', 5)  # 5 (int)
-n2 = ASTNode('NUMBER', 3)  # 3 (int)
-plus_node = ASTNode('PLUS', '+', n1, n2)  # 5 + 3
-
-n3 = ASTNode('NUMBER', 2)  # 2 (int)
-multiply_node = ASTNode('MULTIPLY', '*', plus_node, n3)  # (5 + 3) * 2
-
-# Perform type checking on the AST
-type_check(multiply_node)
-
-# Example of a type error (5 + "hello")
-n1 = ASTNode('NUMBER', 5)  # 5 (int)
-n2 = ASTNode('NUMBER', "hello")  # "hello" (string)
-plus_node = ASTNode('PLUS', '+', n1, n2)  # 5 + "hello"
-
-# Perform type checking on the invalid AST
-type_check(plus_node)
 
